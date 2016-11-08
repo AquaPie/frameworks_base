@@ -15,9 +15,19 @@
 package com.android.internal.os;
 
 import android.content.Intent;
+import android.hardware.SensorEvent;
 import android.view.KeyEvent;
 
 public interface DeviceKeyHandler {
+
+	/**
+     * Invoked when an unknown key was detected by the system, letting the device handle
+     * this special keys prior to pass the key to the active app.
+     *
+     * @param event The key event to be handled
+     * @return If the event is consume
+     */
+    public boolean handleKeyEvent(KeyEvent event);
 
     /**
      * Invoked when an unknown key was detected by the system,
@@ -61,4 +71,12 @@ public interface DeviceKeyHandler {
      * @return an Intent or null
      */
     public Intent isActivityLaunchEvent(KeyEvent event);
+
+    default public String getCustomProxiSensor() {
+        return null;
+    }
+
+    default public boolean getCustomProxiIsNear(SensorEvent event) {
+        return false;
+    }
 }

@@ -281,7 +281,7 @@ import com.android.internal.policy.KeyguardDismissCallback;
 import com.android.internal.policy.PhoneWindow;
 import com.android.internal.statusbar.IStatusBarService;
 import com.android.internal.util.ArrayUtils;
-import com.android.internal.util.aquarios.FileUtils;
+import com.android.internal.util.aquarios.AquaUtils;
 import com.android.internal.util.ScreenshotHelper;
 import com.android.internal.util.ScreenShapeHelper;
 import com.android.internal.widget.PointerLocationView;
@@ -639,7 +639,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     int mVeryLongPressTimeout;
     boolean mAllowStartActivityForLongPressOnPowerDuringSetup;
     MetricsLogger mLogger;
-    private DeviceKeyHandler mDeviceKeyHandler;
 
     private boolean mHandleVolumeKeysInWM;
 
@@ -6325,7 +6324,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                         Slog.i(TAG, "isActivityLaunchEvent from DeviceKeyHandler " + eventLaunchActivity);
                     }
                     wakeUp(event.getEventTime(), mAllowTheaterModeWakeFromKey, "android.policy:KEY");
-                    FileUtils.launchKeyguardDismissIntent(mContext, UserHandle.CURRENT, eventLaunchActivity);
+                    AquaUtils.launchKeyguardDismissIntent(mContext, UserHandle.CURRENT, eventLaunchActivity);
                     result &= ~ACTION_PASS_TO_USER;
                     return result;
                 }
