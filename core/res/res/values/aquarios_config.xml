@@ -1,5 +1,5 @@
 <!--
-     Copyright (C) 2018 GZOSP
+     Copyright (C) 2018 AQUARIOS
 
      Licensed under the Apache License, Version 2.0 (the "License");
      you may not use this file except in compliance with the License.
@@ -15,7 +15,8 @@
 -->
 <resources>
 
-    <!-- Usb drive persistent notification -->
-    <java-symbol type="bool" name="config_persistUsbDriveNotification" />
+    <!-- Whether to persist the notification for when a usb drive device is plugged in -->
+    <bool name="config_persistUsbDriveNotification">false</bool>
 
 </resources>
+
