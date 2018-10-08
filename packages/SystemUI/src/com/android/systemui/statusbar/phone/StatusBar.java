@@ -216,6 +216,7 @@ import com.android.systemui.statusbar.RemoteInputController;
 import com.android.systemui.statusbar.ScrimView;
 import com.android.systemui.statusbar.StatusBarState;
 import com.android.systemui.statusbar.VibratorHelper;
+import com.android.internal.statusbar.ThemeAccentUtils;
 import com.android.systemui.statusbar.notification.AboveShelfObserver;
 import com.android.systemui.statusbar.notification.ActivityLaunchAnimator;
 import com.android.systemui.statusbar.notification.VisualStabilityManager;
@@ -583,6 +584,7 @@ public class StatusBar extends SystemUI implements DemoMode,
     private BatteryController mBatteryController;
     protected boolean mPanelExpanded;
     private IOverlayManager mOverlayManager;
+    private int mCurrentTheme;
     private boolean mKeyguardRequested;
     private boolean mIsKeyguard;
     private LogMaker mStatusBarStateLog;
@@ -801,6 +803,7 @@ public class StatusBar extends SystemUI implements DemoMode,
         final Context context = mContext;
         updateDisplaySize(); // populates mDisplayMetrics
         updateResources();
+        getCurrentThemeSetting();
         updateTheme();
 
         inflateStatusBarWindow(context);
@@ -2077,15 +2080,19 @@ public class StatusBar extends SystemUI implements DemoMode,
         updateTheme();
     }
 
+    // Check for the dark system theme
     public boolean isUsingDarkTheme() {
-        OverlayInfo themeInfo = null;
-        try {
-            themeInfo = mOverlayManager.getOverlayInfo("com.android.systemui.theme.dark",
-                    mLockscreenUserManager.getCurrentUserId());
-        } catch (RemoteException e) {
-            e.printStackTrace();
-        }
-        return themeInfo != null && themeInfo.isEnabled();
+        return ThemeAccentUtils.isUsingDarkTheme(mOverlayManager, mLockscreenUserManager.getCurrentUserId());
+    }
+
+    // Unloads the stock dark theme
+    public void unloadStockDarkTheme() {
+        ThemeAccentUtils.unloadStockDarkTheme(mOverlayManager, mLockscreenUserManager.getCurrentUserId());
+    }
+
+    // Check for black and white accent overlays
+    public void unfuckBlackWhiteAccent() {
+        ThemeAccentUtils.unfuckBlackWhiteAccent(mOverlayManager, mLockscreenUserManager.getCurrentUserId());
     }
 
     @Nullable
@@ -3878,26 +3885,35 @@ public class StatusBar extends SystemUI implements DemoMode,
         Trace.endSection();
     }
 
+    private void getCurrentThemeSetting() {
+        mCurrentTheme = Settings.System.getIntForUser(mContext.getContentResolver(),
+                Settings.System.SYSTEM_THEME_STYLE, 0, mLockscreenUserManager.getCurrentUserId());
+    }
+
     /**
      * Switches theme from light to dark and vice-versa.
      */
     protected void updateTheme() {
         final boolean inflated = mStackScroller != null;
 
+        boolean useDarkTheme = false;
+        if (mCurrentTheme == 0) {
         // The system wallpaper defines if QS should be light or dark.
         WallpaperColors systemColors = mColorExtractor
                 .getWallpaperColors(WallpaperManager.FLAG_SYSTEM);
-        final boolean useDarkTheme = systemColors != null
-                && (systemColors.getColorHints() & WallpaperColors.HINT_SUPPORTS_DARK_THEME) != 0;
+            useDarkTheme = systemColors != null
+                    && (systemColors.getColorHints() & WallpaperColors.HINT_SUPPORTS_DARK_THEME) != 0;
+            // Check for black and white accent so we don't end up
+            // with white on white or black on black
+            unfuckBlackWhiteAccent();
+        } else {
+            useDarkTheme = mCurrentTheme == 2;
+            // Check for black and white accent so we don't end up
+            // with white on white or black on black
+            unfuckBlackWhiteAccent();
+        }
         if (isUsingDarkTheme() != useDarkTheme) {
-            mUiOffloadThread.submit(() -> {
-                try {
-                    mOverlayManager.setEnabled("com.android.systemui.theme.dark",
-                            useDarkTheme, mLockscreenUserManager.getCurrentUserId());
-                } catch (RemoteException e) {
-                    Log.w(TAG, "Can't change theme", e);
-                }
-            });
+            ThemeAccentUtils.setLightDarkTheme(mOverlayManager, mLockscreenUserManager.getCurrentUserId(), useDarkTheme);
         }
 
         // Lock wallpaper defines the color of the majority of the views, hence we'll use it
@@ -3926,6 +3942,18 @@ public class StatusBar extends SystemUI implements DemoMode,
             // Make sure we have the correct navbar/statusbar colors.
             mStatusBarWindowManager.setKeyguardDark(useDarkText);
         }
+    }
+
+    // Switches theme accent from to another or back to stock
+    public void updateAccents() {
+        int accentSetting = Settings.System.getIntForUser(mContext.getContentResolver(),
+                Settings.System.ACCENT_PICKER, 0, mLockscreenUserManager.getCurrentUserId());
+        ThemeAccentUtils.updateAccents(mOverlayManager, mLockscreenUserManager.getCurrentUserId(), accentSetting);
+    }
+
+     // Unload all the theme accents
+    public void unloadAccents() {
+        ThemeAccentUtils.unloadAccents(mOverlayManager, mLockscreenUserManager.getCurrentUserId());
     }
 
     private void updateDozingState() {
@@ -5103,13 +5131,27 @@ public class StatusBar extends SystemUI implements DemoMode,
 
         void observe() {
             ContentResolver resolver = mContext.getContentResolver();
-            update();
+            resolver.registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.ACCENT_PICKER),
+                    false, this, UserHandle.USER_ALL);
+            resolver.registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.SYSTEM_THEME_STYLE),
+                    false, this, UserHandle.USER_ALL);
         }
 
         @Override
         public void onChange(boolean selfChange, Uri uri) {
-            super.onChange(selfChange, uri);
-            update();
+            if (uri.equals(Settings.System.getUriFor(
+                    Settings.System.ACCENT_PICKER))) {
+                // Unload the accents and update the accent only when the user asks.
+                // Keeps us from overloading the system by performing these tasks every time.
+                unloadAccents();
+                updateAccents();
+            } else if (uri.equals(Settings.System.getUriFor(
+                    Settings.System.SYSTEM_THEME_STYLE))) {
+                getCurrentThemeSetting();
+                updateTheme();
+            }
         }
 
         public void update() {
